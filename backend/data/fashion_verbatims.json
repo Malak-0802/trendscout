@@ -1,0 +1,12 @@
+{
+  "fashion_terms": {
+    "gorpcore": {"meaning": "outdoor luxury", "sentiment": "positive"},
+    "quiet_luxury": {"meaning": "minimalist expensive fashion", "sentiment": "positive"},
+    "Y2K": {"meaning": "year 2000 aesthetic", "sentiment": "positive"},
+    "drip": {"meaning": "excellent style", "sentiment": "very_positive"},
+    "c tellement Y2K": {"meaning": "is so Y2K (ironic praise)", "sentiment": "positive"},
+    "fits": {"meaning": "outfits", "sentiment": "neutral"},
+    "c pas la vibe": {"meaning": "doesn't match aesthetic", "sentiment": "negative"},
+    "c un flop": {"meaning": "it's uncool", "sentiment": "very_negative"}
+  }
+}
