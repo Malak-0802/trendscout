@@ -199,24 +199,6 @@ export default function TrendAnalyzer({ product }: { product: string }) {
 
   return (
     <div className="max-w-4xl mx-auto">
-      {/* Product Image - Top */}
-      <div className="bg-slate-800 rounded-lg border border-slate-700 overflow-hidden mb-6">
-        {data.image_url ? (
-          <div className="w-full h-80">
-            <img
-              src={data.image_url}
-              alt={data.product_name}
-              className="w-full h-full object-cover"
-            />
-          </div>
-        ) : (
-          <div className="w-full h-80 bg-slate-700 flex items-center justify-center text-gray-400">
-            No image available
-          </div>
-        )}
-      </div>
-
-      {/* Analysis Card */}
       <div className="bg-slate-900 rounded-lg border border-slate-700 p-8 space-y-6">
         
         {/* Header */}

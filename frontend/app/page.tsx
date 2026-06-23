@@ -1,28 +1,33 @@
 'use client';
 
-import { useState } from 'react';
+import { useAuth } from './contexts/AuthContext';
+import { useRouter } from 'next/navigation';
+import { useEffect, useState } from 'react';
 import TrendAnalyzer from './components/TrendAnalyzer';
+import Navbar from './components/Navbar';
 
 export default function Home() {
+  const { isAuthenticated } = useAuth();
+  const router = useRouter();
   const [productName, setProductName] = useState('Gorpcore');
   const [submitted, setSubmitted] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    setSubmitted(true);
-  };
+  useEffect(() => {
+    if (!isAuthenticated) {
+      router.push('/login');
+    }
+  }, [isAuthenticated, router]);
+
+  if (!isAuthenticated) {
+    return null;
+  }
 
   return (
     <main className="min-h-screen bg-gradient-to-b from-slate-900 to-slate-800">
-      <header className="bg-slate-900 border-b border-slate-700 sticky top-0">
-        <div className="max-w-6xl mx-auto px-4 py-6">
-          <h1 className="text-4xl font-bold text-white">🎯 Trendscout</h1>
-          <p className="text-gray-400 mt-1">Fashion Trend Forecasting with AI</p>
-        </div>
-      </header>
-
+      <Navbar />
+      
       <div className="max-w-6xl mx-auto px-4 py-8">
-        <form onSubmit={handleSubmit} className="mb-8">
+        <form onSubmit={(e) => { e.preventDefault(); setSubmitted(true); }} className="mb-8">
           <div className="flex gap-4">
             <input
               type="text"
@@ -53,10 +58,7 @@ export default function Home() {
             {['Gorpcore', 'Quiet Luxury', 'Y2K Revival'].map((trend) => (
               <button
                 key={trend}
-                onClick={() => {
-                  setProductName(trend);
-                  setSubmitted(true);
-                }}
+                onClick={() => { setProductName(trend); setSubmitted(true); }}
                 className="p-4 bg-slate-800 border border-slate-700 rounded-lg hover:border-blue-500 transition text-left"
               >
                 <p className="font-semibold text-white">{trend}</p>
