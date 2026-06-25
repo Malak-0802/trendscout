@@ -1,11 +1,24 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-import random
-import hashlib
-import requests
+import os
+import httpx
+import sys
+import asyncio
+from dotenv import load_dotenv
 
-app = FastAPI(title="Trendscout API", version="0.1.0")
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), '..'))
+
+load_dotenv(dotenv_path="../.env")
+
+from scrapers.review_scraper import get_product_reviews
+from integrations.ollama_analyzer import analyze_with_ollama
+
+print("\n✅ Imports réussis")
+
+# ====== CONFIGURATION ======
+app = FastAPI(title="Trendscout API", version="1.0.0-FINAL")
 
 app.add_middleware(
     CORSMiddleware,
@@ -15,26 +28,30 @@ app.add_middleware(
     allow_headers=["*"]
 )
 
+OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://localhost:9999")
+OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "llama2-fashion-hf")
+PEXELS_API_KEY = os.getenv("PEXELS_API_KEY", "default_key")
+API_PORT = int(os.getenv("API_PORT", 8000))
+API_HOST = os.getenv("API_HOST", "0.0.0.0")
+
+fake_analyses_db = []
+
+# ====== MODELS ======
 class TrendAnalysisRequest(BaseModel):
     product_name: str
     category: str
     season: str
 
+# ====== FONCTIONS ======
+
 def get_product_image(product_name: str):
-    """Get image from Pexels with Unsplash fallback"""
+    """Get image from Pexels"""
     
-    # FALLBACK 1: Pexels API
     try:
-        headers = {
-            'Authorization': '563492ad6f91700001000001a5d4e4d652b845e5b0e8c3d1f'
-        }
+        headers = {'Authorization': PEXELS_API_KEY}
+        params = {'query': f'{product_name} fashion', 'per_page': 1}
         
-        params = {
-            'query': f'{product_name} fashion',
-            'per_page': 1
-        }
-        
-        response = requests.get(
+        response = httpx.get(
             'https://api.pexels.com/v1/search',
             headers=headers,
             params=params,
@@ -44,73 +61,137 @@ def get_product_image(product_name: str):
         if response.status_code == 200:
             data = response.json()
             if data.get('photos') and len(data['photos']) > 0:
-                image_url = data['photos'][0]['src']['large']
-                print(f"Image found from Pexels: {product_name}")
-                return image_url
+                print(f"✅ Image trouvée via Pexels")
+                return data['photos'][0]['src']['large']
     
     except Exception as e:
-        print(f"Pexels error: {e}")
+        print(f"⚠️ Erreur Pexels: {e}")
     
-    # FALLBACK 2: Unsplash Direct URL (plus simple, toujours marche)
     try:
         encoded_query = product_name.replace(' ', '+')
-        image_url = f"https://source.unsplash.com/600x400/?{encoded_query},fashion"
-        print(f"Using Unsplash fallback for: {product_name}")
-        return image_url
+        return f"https://source.unsplash.com/600x400/?{encoded_query},fashion"
+    except:
+        pass
     
-    except Exception as e:
-        print(f"Unsplash fallback error: {e}")
-    
-    # FALLBACK 3: Generic placeholder image
-    print(f"No image found for: {product_name}, using placeholder")
     return "https://source.unsplash.com/600x400/?fashion,trend"
 
-def generate_analysis(product_name: str):
-    """Generate unique analysis based on product name"""
+
+async def generate_analysis_final(product_name: str):
+    """
+    SOLUTION FINALE: Scraping réel + Fine-tuning Hugging Face + Ollama
+    """
     
-    # Create seed from product name for consistency
-    hash_obj = hashlib.md5(product_name.lower().encode())
-    seed = int(hash_obj.hexdigest(), 16) % 100000
-    random.seed(seed)
+    print(f"\n{'='*80}")
+    print(f" ANALYSE COMPLÈTE: {product_name}")
+    print(f"{'='*80}")
     
-    # Generate varied metrics
-    sentiment_score = random.randint(30, 95)
-    catwalk_adoption = random.randint(20, 90)
-    streetstyle_adoption = random.randint(25, 95)
-    risk_score = random.randint(10, 85)
-    lifespan_months = random.randint(4, 36)
+    # ÉTAPE 1: Scraper
+    print(f"\n📥 ÉTAPE 1: Scraping des avis réels...")
+    reviews = await get_product_reviews(product_name)
     
-    # Determine verdict based on metrics
-    if sentiment_score > 70 and catwalk_adoption > 60:
-        prediction = "ADOPT"
-    elif sentiment_score > 40 and streetstyle_adoption > 50:
-        prediction = "MONITOR"
-    else:
-        prediction = "AVOID"
+    if not reviews:
+        print(f"⚠️ Aucun avis trouvé")
+        return {
+            "product_name": product_name,
+            "sentiment_score": 50,
+            "catwalk_adoption": 50,
+            "streetstyle_adoption": 40,
+            "prediction": "MONITOR",
+            "risk_score": 50,
+            "lifespan_months": 12,
+            "image_url": get_product_image(product_name),
+            "data_source": "No reviews found",
+            "review_count": 0,
+            "error": "Pas d'avis disponibles"
+        }
     
-    # Get image (avec fallback)
+    print(f"✅ {len(reviews)} avis extraits")
+    
+    # ÉTAPE 2: Analyser avec Ollama fine-tuned
+    print(f"\n🤖 ÉTAPE 2: Analyse avec Ollama fine-tuned...")
+    try:
+        aggregated_analysis = await analyze_with_ollama(
+            reviews=reviews,
+            product_name=product_name,
+            ollama_url=OLLAMA_BASE_URL,
+            model=OLLAMA_MODEL
+        )
+    except Exception as e:
+        print(f"❌ Erreur: {e}")
+        return {
+            "product_name": product_name,
+            "error": str(e),
+            "data_source": "Error",
+            "message": "Assurez-vous qu'Ollama est lancé: ollama serve"
+        }
+    
+    # ÉTAPE 3: Image
+    print(f"\n  ÉTAPE 3: Image...")
     image_url = get_product_image(product_name)
+    
+    print(f"\n✅ Analyse complète")
     
     return {
         "product_name": product_name,
-        "sentiment_score": sentiment_score,
-        "catwalk_adoption": catwalk_adoption,
-        "streetstyle_adoption": streetstyle_adoption,
-        "prediction": prediction,
-        "risk_score": risk_score,
-        "lifespan_months": lifespan_months,
-        "image_url": image_url
+        "sentiment_score": aggregated_analysis['sentiment_score'],
+        "catwalk_adoption": aggregated_analysis['catwalk_adoption'],
+        "streetstyle_adoption": aggregated_analysis['streetstyle_adoption'],
+        "prediction": aggregated_analysis['prediction'],
+        "risk_score": aggregated_analysis['risk_score'],
+        "lifespan_months": aggregated_analysis['lifespan_months'],
+        "image_url": image_url,
+        "data_source": "Real web scraping + Hugging Face fine-tuned Llama2",
+        "review_count": aggregated_analysis['total_reviews_analyzed'],
+        "viability_breakdown": aggregated_analysis.get('viability_breakdown', {})
     }
+
+# ====== ENDPOINTS ======
 
 @app.get("/health")
 async def health_check():
-    return {"status": "online", "ollama_model": "llama2:13b"}
+    return {
+        "status": "online",
+        "version": "1.0.0-FINAL",
+        "architecture": "Web Scraping + Hugging Face Fine-tuning + Ollama",
+        "ollama_model": OLLAMA_MODEL,
+        "ollama_url": OLLAMA_BASE_URL
+    }
 
 @app.post("/api/analyze-trend")
 async def analyze_trend(request: TrendAnalysisRequest):
-    analysis = generate_analysis(request.product_name)
+    """
+    Analyse complète avec scraping + fine-tuning
+    """
+    
+    print(f"\n{'='*80}")
+    print(f" NOUVELLE ANALYSE: {request.product_name}")
+    print(f"{'='*80}")
+    
+    analysis = await generate_analysis_final(request.product_name)
+    
+    fake_analyses_db.append(analysis)
+    
     return analysis
+
+@app.get("/api/analyses")
+async def get_analyses():
+    """Toutes les analyses"""
+    return fake_analyses_db
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    
+    print(f"\n{'='*80}")
+    print(f" TRENDSCOUT API - VERSION FINALE")
+    print(f"{'='*80}")
+    print(f"\n Serveur: http://{API_HOST}:{API_PORT}")
+    print(f" Model: {OLLAMA_MODEL}")
+    print(f" Ollama: {OLLAMA_BASE_URL}")
+    print(f"\n Architecture:")
+    print(f"   1. Web Scraping (Google, Reddit, HN)")
+    print(f"   2. Fine-tuning Hugging Face datasets")
+    print(f"   3. Ollama analysis")
+    print(f"\n Documentation: http://localhost:{API_PORT}/docs")
+    print(f"{'='*80}\n")
+    
+    uvicorn.run(app, host=API_HOST, port=API_PORT)
