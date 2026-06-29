@@ -45,35 +45,8 @@ class TrendAnalysisRequest(BaseModel):
 # ====== FONCTIONS ======
 
 def get_product_image(product_name: str):
-    """Get image from Pexels"""
-    
-    try:
-        headers = {'Authorization': PEXELS_API_KEY}
-        params = {'query': f'{product_name} fashion', 'per_page': 1}
-        
-        response = httpx.get(
-            'https://api.pexels.com/v1/search',
-            headers=headers,
-            params=params,
-            timeout=5
-        )
-        
-        if response.status_code == 200:
-            data = response.json()
-            if data.get('photos') and len(data['photos']) > 0:
-                print(f"✅ Image trouvée via Pexels")
-                return data['photos'][0]['src']['large']
-    
-    except Exception as e:
-        print(f"⚠️ Erreur Pexels: {e}")
-    
-    try:
-        encoded_query = product_name.replace(' ', '+')
-        return f"https://source.unsplash.com/600x400/?{encoded_query},fashion"
-    except:
-        pass
-    
-    return "https://source.unsplash.com/600x400/?fashion,trend"
+    """Return no product image to keep analysis fast."""
+    return ""
 
 
 async def generate_analysis_final(product_name: str):

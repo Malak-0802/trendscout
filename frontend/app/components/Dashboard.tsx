@@ -67,8 +67,25 @@ export default function Dashboard() {
     { name: 'AVOID', value: verdictCounts.AVOID, color: '#ef4444' }
   ];
 
-  const avgSentiment = Math.round(analyses.reduce((a, b) => a + b.sentiment_score, 0) / analyses.length);
-  const avgAdoption = Math.round((analyses.reduce((a, b) => a + b.catwalk_adoption + b.streetstyle_adoption, 0) / (analyses.length * 2)));
+  const sentimentScores = analyses
+    .map((a) => Number(a.sentiment_score))
+    .filter((score) => !Number.isNaN(score));
+  const adoptionScores = analyses
+    .map((a) => {
+      const catwalk = Number(a.catwalk_adoption);
+      const streetstyle = Number(a.streetstyle_adoption);
+      return [catwalk, streetstyle].filter((value) => !Number.isNaN(value));
+    })
+    .flat();
+
+  const avgSentiment =
+    sentimentScores.length > 0
+      ? Math.round(sentimentScores.reduce((acc, score) => acc + score, 0) / sentimentScores.length)
+      : 0;
+  const avgAdoption =
+    adoptionScores.length > 0
+      ? Math.round(adoptionScores.reduce((acc, score) => acc + score, 0) / adoptionScores.length)
+      : 0;
 
   return (
     <div className="space-y-8">
